@@ -1,6 +1,9 @@
 name: Download Unity Editor
 
 on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/download-unity.yml]
   workflow_dispatch:
     inputs:
       version:
