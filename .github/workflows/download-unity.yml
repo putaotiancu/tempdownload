@@ -32,9 +32,9 @@ jobs:
       - name: Download and verify installer
         shell: bash
         env:
-          VERSION: ${{ inputs.version }}
-          REVISION: ${{ inputs.revision }}
-          SHA256: ${{ inputs.sha256 }}
+          VERSION: ${{ inputs.version || '6000.3.24f1' }}
+          REVISION: ${{ inputs.revision || '4e7b9b5b6244' }}
+          SHA256: ${{ inputs.sha256 || '7dbc333402d1948ff6e995672d3cf8953d3319ffb7cf1d428a7d3b8a99229829' }}
         run: |
           set -euo pipefail
           installer="UnitySetup64-${VERSION}.exe"
@@ -60,7 +60,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ inputs.version || '6000.3.24f1' }}
         run: |
           set -euo pipefail
           tag="unity-${VERSION}"
@@ -75,7 +75,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ inputs.version || '6000.3.24f1' }}
         run: |
           set -euo pipefail
           tag="unity-${VERSION}"
