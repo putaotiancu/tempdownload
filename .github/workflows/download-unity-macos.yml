@@ -1,0 +1,64 @@
+name: Download Unity Editor for Apple Silicon Mac
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/download-unity-macos.yml]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  download:
+    runs-on: windows-latest
+    env:
+      VERSION: 6000.3.24f1
+      REVISION: 4e7b9b5b6244
+      EDITOR_MD5: md5-HgJtvURngRWTwAhRaiatdg==
+      IOS_MD5: md5-iIvLs+clGGz0gY8FWLX95w==
+    steps:
+      - name: Download and verify Mac packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          editor="Unity-${VERSION}.pkg"
+          ios="UnitySetup-iOS-Support-for-Editor-${VERSION}.pkg"
+          base="https://download.unity3d.com/download_unity/${REVISION}"
+          curl --fail --location --retry 3 --retry-delay 5 \
+            --output "$editor" "${base}/MacEditorInstallerArm64/${editor}"
+          curl --fail --location --retry 3 --retry-delay 5 \
+            --output "$ios" "${base}/MacEditorTargetInstaller/${ios}"
+
+          verify_md5() {
+            actual="md5-$(openssl dgst -md5 -binary "$1" | openssl base64)"
+            if [ "$actual" != "$2" ]; then
+              printf '%s: expected %s, got %s\n' "$1" "$2" "$actual" >&2
+              return 1
+            fi
+          }
+          verify_md5 "$editor" "$EDITOR_MD5"
+          verify_md5 "$ios" "$IOS_MD5"
+
+          split --bytes=1800M --numeric-suffixes=1 --suffix-length=1 \
+            "$editor" "${editor}.part"
+          md5sum "$editor" "$ios" > MD5SUMS.txt
+          sha256sum "$editor" "$ios" > SHA256SUMS.txt
+          ls -lh "$editor" "${editor}.part"* "$ios" MD5SUMS.txt SHA256SUMS.txt
+
+      - name: Upload packages to GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="unity-${VERSION}-macos-arm64"
+          editor="Unity-${VERSION}.pkg"
+          ios="UnitySetup-iOS-Support-for-Editor-${VERSION}.pkg"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Unity Editor ${VERSION} (Apple Silicon Mac + iOS)" \
+              --notes "Official Apple Silicon Mac Editor and iOS Build Support. The Editor is split into 1800 MiB parts. Download all parts, concatenate them in numeric order, then verify with MD5SUMS.txt or SHA256SUMS.txt."
+          gh release upload "$tag" "${editor}.part"* "$ios" MD5SUMS.txt SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --clobber
