@@ -39,13 +39,37 @@ jobs:
           set -euo pipefail
           installer="UnitySetup64-${VERSION}.exe"
           url="https://download.unity3d.com/download_unity/${REVISION}/Windows64EditorInstaller/${installer}"
-          curl --fail --location --retry 5 --retry-delay 10 --retry-all-errors \
-            --output "$installer" "$url"
-          printf '%s  %s\n' "$SHA256" "$installer" | sha256sum --check
+          http_code=$(curl --location --retry 3 --retry-delay 5 \
+            --output "$installer" --write-out '%{http_code}' "$url" || true)
+          if [ "$http_code" != "200" ]; then
+            printf 'URL: %s\nHTTP status: %s\n' "$url" "$http_code" > download-error.txt
+            exit 1
+          fi
+          if ! printf '%s  %s\n' "$SHA256" "$installer" | sha256sum --check; then
+            actual=$(sha256sum "$installer" | awk '{print $1}')
+            printf 'Expected SHA-256: %s\nActual SHA-256: %s\n' "$SHA256" "$actual" > download-error.txt
+            exit 1
+          fi
           split --bytes=1800M --numeric-suffixes=1 --suffix-length=1 \
             "$installer" "${installer}.part"
           printf '%s  %s\n' "$SHA256" "$installer" > SHA256SUMS.txt
           ls -lh "$installer" "${installer}.part"* SHA256SUMS.txt
+
+      - name: Upload download error
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          tag="unity-${VERSION}"
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" \
+              --title "Unity Editor ${VERSION} (Windows x64)" \
+              --notes "Unity download diagnostics and split installer parts."
+          gh release upload "$tag" download-error.txt \
+            --repo "$GITHUB_REPOSITORY" --clobber
 
       - name: Upload split installers to GitHub Release
         shell: bash
